@@ -916,3 +916,31 @@ spec:
             requests:
               cpu: 100m
               memory: 200Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vulnerable-python
+  namespace: sock-shop
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vulnerable-python
+  template:
+    metadata:
+      labels:
+        app: vulnerable-python
+    spec:
+      containers:
+        - name: vulnerable-python
+          image: havnevej/speciale-python
+          ports:
+            - containerPort: 5000
+          resources:
+            limits:
+              cpu: 300m
+              memory: 500Mi
+            requests:
+              cpu: 10m
+              memory: 20Mi
