@@ -1,3 +1,3 @@
 #!/bin/bash
 
-docker build -t vulnerable-php .
+docker build -t havnevej/speciale .

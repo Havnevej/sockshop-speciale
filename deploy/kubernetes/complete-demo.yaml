@@ -906,7 +906,7 @@ spec:
     spec:
       containers:
         - name: vulnerable-php
-          image:  havnevej/speciale:1.0.0
+          image:  havnevej/speciale:latest
           ports:
             - containerPort: 80
           resources:
