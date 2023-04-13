@@ -888,3 +888,31 @@ spec:
   selector:
     name: user-db
 
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vulnerable-php
+  namespace: sock-shop
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vulnerable-php
+  template:
+    metadata:
+      labels:
+        app: vulnerable-php
+    spec:
+      containers:
+        - name: vulnerable-php
+          image:  havnevej/speciale:1.0.0
+          ports:
+            - containerPort: 80
+          resources:
+            limits:
+              cpu: 300m
+              memory: 500Mi
+            requests:
+              cpu: 100m
+              memory: 200Mi
