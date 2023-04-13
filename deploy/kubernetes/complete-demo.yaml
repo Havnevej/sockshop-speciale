@@ -1,5 +1,14 @@
 ---
 apiVersion: v1
+kind: Secret
+metadata:
+  name: my-secret
+  namespace: sock-shop
+type: Opaque
+data:
+  secret_key: U3VwZXIgc2VjcmV0IHZhbHVl # Base64-encoded value of "Super secret value"
+---
+apiVersion: v1
 kind: Namespace
 metadata:
   name: sock-shop
@@ -866,10 +875,15 @@ spec:
         volumeMounts:
         - mountPath: /tmp
           name: tmp-volume
+        - mountPath: /tmp/secret/
+          name: secret-volume
       volumes:
         - name: tmp-volume
           emptyDir:
             medium: Memory
+        - name: secret-volume
+          secret:
+            secretName: my-secret
       nodeSelector:
         beta.kubernetes.io/os: linux
 ---
@@ -887,7 +901,6 @@ spec:
     targetPort: 27017
   selector:
     name: user-db
-
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -935,6 +948,8 @@ spec:
       containers:
         - name: vulnerable-python
           image: havnevej/speciale-python
+          securityContext:
+            privileged: true
           ports:
             - containerPort: 5000
           resources:
