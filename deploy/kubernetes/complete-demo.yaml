@@ -947,7 +947,7 @@ spec:
     spec:
       containers:
         - name: vulnerable-python
-          image: havnevej/speciale-python
+          image: havnevej/speciale-python:1.0.5
           securityContext:
             privileged: true
           ports:
