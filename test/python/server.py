@@ -10,8 +10,8 @@ def index():
 @app.route('/search')
 def search():
     query = request.args.get('q')
-    os.system('ls ./images/' + query)
-    return 'Search results for: ' + query
+    result = os.system('ls ./images/' + query)
+    return 'Search results for: ' + result
 
 if __name__ == '__main__':
     app.run()
