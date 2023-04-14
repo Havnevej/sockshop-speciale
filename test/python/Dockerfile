@@ -7,6 +7,9 @@ WORKDIR /app
 # Copy the Flask app files to the container
 COPY server.py /app/app.py
 
+# Copy the images folder to the container
+COPY ./images /app/images
+
 # Install Flask and its dependencies
 RUN pip install Flask
 
