@@ -23,6 +23,7 @@ sudo k3d cluster create sockshop --agents 1 --servers 1
 
 # Apply the sock shop to the cluster
 sudo kubectl apply -f microservices-demo/deploy/kubernetes/complete-demo.yaml
+*This will deploy the sockshop demo application and the vulnerable deployments that was introduced in this demonstration*
 
 # Setting up the k3d environment
 We use k3d to setup a demo kubernetes cluster using docker, with the speciale forked version of the microservice-demo application from Weaveworks.
@@ -33,6 +34,9 @@ K9s is an interative command line GUI for a kubernetes cluster. Using: ":" colon
 
 ## Port forwarding the vulnerable python deployment
 Using k9s
+- Launch k9s: sudo k9s
+You should see the interactive K9s GUI
+----
 *:* namespaces <enter>
 > highlight sockshop namespace <enter>
 *:* deployments <enter>
