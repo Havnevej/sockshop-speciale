@@ -29,3 +29,7 @@ mkdir /mnt-test && mount /dev/sda3 /mnt-test
 cd /mnt-test/var/lib/docker
 
 ```
+
+# Ebpf one liners with bpftrace
+- list trace points
+    bpftrace -l 'tracepoint:syscalls:sys_enter_*' 
