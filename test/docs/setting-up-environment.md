@@ -1,6 +1,6 @@
 
 # Pre requisites
-**Make sure the following is installed:**
+**Make sure the following is installed on your box:**
 - brew/linuxbrew
 - Docker
 - K3d
