@@ -21,7 +21,7 @@ int deny_mount(struct pt_regs *ctx, const char __user *pathname, int flags) {
 
 
 # Load the eBPF program
-b = BPF(text=prog)
+b = BPF(text=prog, debug=4)
 
 # Attach the eBPF program to the mount syscall
 b.attach_kprobe(event="do_mount", fn_name="deny_mount")
