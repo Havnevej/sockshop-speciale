@@ -1,32 +1,30 @@
-from bcc import BPF
-import os
-
-# Define the BPF program
-program = """
 #include <linux/fs.h>
 #include <linux/fs_struct.h>
 #include <linux/nsproxy.h>
 #include <linux/errno.h>
 
+#define MAX_DEV_NAME_LEN 256
 
-#define __LOWER(x) (x & 0xffffffff)
-#define __UPPER(x) (x >> 32)
-LSM_PROBE(path_chmod, const struct path *path, umode_t mode)
+/*LSM_PROBE(path_chmod, const struct path *path, umode_t mode)
 {
     bpf_trace_printk("Change mode of file name %s\\n", path->dentry->d_iname);
     return -1;
-}
+}*/
 LSM_PROBE(sb_mount, const char *dev_name, const struct path *path,
 	 const char *type, unsigned long flags, void *dat)
 {
     struct task_struct *task;
     task = (struct task_struct *)bpf_get_current_task();
+    char first_7_chars[sizeof(dev_name)];
+    bpf_probe_read(first_7_chars, sizeof(dev_name), dev_name);
+    const char prefix[] = "/dev/sd";
 
-    char prefix[] = "/dev/sd";
-    //if (__builtin_memcmp(dev_name, prefix, sizeof(prefix) - 1) == 0) {
-    //    // Disallow the mount call
-    //    return -1;
-    //}
+
+    if (true) {
+        // Disallow the mount call
+        bpf_trace_printk("first 7 %s", first_7_chars);
+        return -EPERM;
+    }
 
 
     struct nsproxy *ns = task->nsproxy;
@@ -40,9 +38,3 @@ LSM_PROBE(sb_mount, const char *dev_name, const struct path *path,
     bpf_trace_printk("Mount onto path: %s  --- %s \\n", path->dentry->d_iname, dev_name);
     return -1;
 }
-"""
-
-# Load and attach the BPF program to the 'mount' syscall
-bpf = BPF(src_file="works.c")
-
-bpf.trace_print()
