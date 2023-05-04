@@ -15,8 +15,8 @@ LSM_PROBE(sb_mount, const char *dev_name, const struct path *path,
 {
     struct task_struct *task;
     task = (struct task_struct *)bpf_get_current_task();
-    char first_7_chars[sizeof(dev_name)];
-    bpf_probe_read(first_7_chars, sizeof(dev_name), dev_name);
+    char first_7_chars[9];
+    bpf_probe_read(first_7_chars, 9, dev_name);
     const char prefix[] = "/dev/sd";
 
 
