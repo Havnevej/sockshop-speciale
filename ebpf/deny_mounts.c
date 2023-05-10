@@ -159,12 +159,25 @@ static __always_inline int init_context(context_t *context)
     context->uid = bpf_get_current_uid_gid();
     bpf_get_current_comm(&context->comm, sizeof(context->comm));
     char * uts_name = get_task_uts_name(task);
-
     if (uts_name)
         bpf_probe_read_str(&context->uts_name, TASK_COMM_LEN, uts_name);
 
     // Save timestamp in microsecond resolution
     context->ts = bpf_ktime_get_ns()/1000;
+        
+    bpf_trace_printk("host_tid: %d", context->host_tid);
+    bpf_trace_printk("host_pid: %d", context->host_pid);
+    bpf_trace_printk("host_ppid: %d", context->host_ppid);
+    bpf_trace_printk("tid: %d", context->tid);
+    bpf_trace_printk("pid: %d", context->pid);
+    bpf_trace_printk("ppid: %d", context->ppid);
+    bpf_trace_printk("mnt_id: %d", context->mnt_id);
+    bpf_trace_printk("pid_id: %d", context->pid_id);
+    bpf_trace_printk("uid: %d", context->uid);
+    bpf_trace_printk("comm: %s", context->comm);
+    bpf_trace_printk("uts_name: %s", context->uts_name);
+    bpf_trace_printk("ts: %d", context->ts);
+
 
     return 0;
 }
