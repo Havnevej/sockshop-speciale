@@ -145,7 +145,7 @@ static __always_inline int init_context(context_t *context)
 {
     struct task_struct *task;
     task = (struct task_struct *)bpf_get_current_task();
-    bpf_trace_printk("test");
+
     if (!task){return 0;}
     u64 id = bpf_get_current_pid_tgid();
     context->host_tid = id;
@@ -202,15 +202,30 @@ struct data_t2 {
     int mount_inum;
 };
 
+
+// https://www.bluetoad.com/publication/?i=701493&article_id=3987581&view=articleBrowser
+/*  Deny programs with pppid == 1 to get new process executions in the containers
+    This ensures that we cant get a ppid over 1 and all the forks in the container will be from
+*/
+LSM_PROBE(bprm_check_security, struct linux_binprm *bprm)
+{
+    context_t context = {};
+    init_context(&context);
+    
+    if(context.ppid == 1) {bpf_trace_printk("Deny process"); return -EPERM;}
+    return 0;
+}
+
 LSM_PROBE(sb_mount, const char *dev_name, const struct path *path,
 	 const char *type, unsigned long flags, void *dat)
 {
     /*if (dev_name == NULL || path == NULL || type == NULL || flags == NULL || dat == NULL) {
         return false;
     }*/
-    bpf_trace_printk("test");
+
     context_t context = {};
     init_context(&context);
+    if (context.ppid == 1 && context.host_ppid != 1){return -1;} else {return 0;}
     struct task_struct *task;
     struct data_t event = {};
     struct nsproxy *nsproxy;
