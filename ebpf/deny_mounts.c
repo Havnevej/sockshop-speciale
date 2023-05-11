@@ -6,12 +6,13 @@
 #include <linux/ns_common.h>
 #include <linux/pid_namespace.h>
 
-/*LSM_PROBE(path_chmod, const struct path *path, umode_t mode)
-{
-    bpf_trace_printk("Change mode of file name %s", path->dentry->d_iname);
-    return -1;
-}*/
+
+
 #define MAX_STR_LEN 412
+#define CONTAINER_MAX_IDS 512
+
+BPF_ARRAY(container_pids, u32, CONTAINER_MAX_IDS);
+
 struct mnt_namespace {
     atomic_t count;
     struct ns_common ns;
@@ -164,7 +165,7 @@ static __always_inline int init_context(context_t *context)
 
     // Save timestamp in microsecond resolution
     context->ts = bpf_ktime_get_ns()/1000;
-        
+    /*
     bpf_trace_printk("host_tid: %d", context->host_tid);
     bpf_trace_printk("host_pid: %d", context->host_pid);
     bpf_trace_printk("host_ppid: %d", context->host_ppid);
@@ -177,7 +178,10 @@ static __always_inline int init_context(context_t *context)
     bpf_trace_printk("comm: %s", context->comm);
     bpf_trace_printk("uts_name: %s", context->uts_name);
     bpf_trace_printk("ts: %d", context->ts);
-
+    //int inum = 0;
+    //inum = READ_KERN(READ_KERN(task->nsproxy)->mnt_ns)->ns.inum;
+    //bpf_trace_printk("test %d",inum);
+    */
 
     return 0;
 }
@@ -194,15 +198,6 @@ static __always_inline int get_config(u32 key)
     return *config;
 }
 
-BPF_PERF_OUTPUT(hey);
-struct data_t2 {
-    u32 pid;
-    char command[16];
-    char message[12];
-    int mount_inum;
-};
-
-
 // https://www.bluetoad.com/publication/?i=701493&article_id=3987581&view=articleBrowser
 /*  Deny programs with pppid == 1 to get new process executions in the containers
     This ensures that we cant get a ppid over 1 and all the forks in the container will be from
@@ -211,8 +206,38 @@ LSM_PROBE(bprm_check_security, struct linux_binprm *bprm)
 {
     context_t context = {};
     init_context(&context);
-    
-    if(context.ppid == 1) {bpf_trace_printk("Deny process"); return -EPERM;}
+    int i = 0;
+    int ii = 0;
+    u32 *val;
+    for (i=0; i<=CONTAINER_MAX_IDS;i++){
+        // Intermediate value because verifier does not know the iterator linearly increases if passed to loockup()
+        ii=i;
+        val = container_pids.lookup(&ii);
+        if (val) {
+            //originates from a container pid
+            if (*val == context.host_ppid) {
+                if (ii < CONTAINER_MAX_IDS){
+                    int index = ii+1;
+                    for (int iii = 0; iii<=CONTAINER_MAX_IDS; iii++){
+                        index=iii;
+                        val = container_pids.lookup(&index);
+                        bpf_trace_printk("index %d", index);
+                        if (val){
+                            bpf_trace_printk("pid %d", *val);
+                            if(*val == 0){
+                                container_pids.update(&index, &context.pid);
+                                bpf_trace_printk("pid %d", context.pid);
+                                bpf_trace_printk("index %d", index);
+                                bpf_trace_printk("add pid:[%d] to list of container pids \n",context.pid);
+                                return  0;
+                            }
+                        }
+                    }
+                    return 0;
+                }
+            }
+        } 
+    }
     return 0;
 }
 
@@ -225,69 +250,23 @@ LSM_PROBE(sb_mount, const char *dev_name, const struct path *path,
 
     context_t context = {};
     init_context(&context);
-    if (context.ppid == 1 && context.host_ppid != 1){return -1;} else {return 0;}
-    struct task_struct *task;
-    struct data_t event = {};
-    struct nsproxy *nsproxy;
-    struct mnt_namespace *mnt_ns;
-    struct cgroup_namespace *cgroup_ns;
-    struct ns_common ns;
-    task = (struct task_struct *)bpf_get_current_task();
-    if(task){
-            //bpf_trace_printk("Pid: %s ", task->real_parent->tgid);
-        unsigned long flags_value = 0;
-        bpf_probe_read(&flags_value, sizeof(flags_value), &task->flags);
-        // Get nsproxy
-        bpf_probe_read(&nsproxy, sizeof(nsproxy), &(task->nsproxy));
-        if (!nsproxy) {
-            bpf_trace_printk("Invalid nsproxy struct pointer");
-            return -1;
-        }
-        // Get mount_ns
-        bpf_probe_read(&mnt_ns, sizeof(mnt_ns), &(nsproxy->mnt_ns));
-        if (!mnt_ns) {
-            bpf_trace_printk("Invalid mnt_namespace struct pointer");
-            return -1;
-        }
-        // Check if ns is valid before accessing inum field
-        if (bpf_probe_read(&ns, sizeof(ns), &(mnt_ns->ns)) != 0) {
-            //bpf_trace_printk("Invalid ns struct pointer");
-            return -1;
-        }
+    int i = 0;
+    int ii = 0;
+    u32 *val;
+    bpf_trace_printk("container_ppid[%d] \n",context.ppid);
+    for (i=0; i<=CONTAINER_MAX_IDS;i++){
+        // Intermediate value because verifier does not know the iterator linearly increases if passed to loockup()
+        ii=i;
+        val = container_pids.lookup(&ii);
+        if (val) {
+            //originates from a container pid
+            if (*val == context.host_ppid) {bpf_trace_printk("Deny");return -EPERM;}
+        } 
+    }
 
-    } else {
+    if (context.ppid == 1 && context.host_ppid != 1){
+        bpf_trace_printk("Deny mount path: %s  --- onto %s ",dev_name ,path->dentry->d_iname);
         return -EPERM;
     }
-
-    bpf_trace_printk("Mount namespace inum: %d", ns.inum);
-    return -EPERM;
-    //bpf_trace_printk("pid: %i", *task->pid);
-    if (!nsproxy){
-        return 0;
-    }
-
-    
-    //mnt_ns = nsproxy->mnt_ns;
-    struct data_t2 data = {};
-    char message[12] = "Hello World";
-    data.pid = bpf_get_current_pid_tgid();
-    bpf_get_current_comm(&data.command, sizeof(data.command));
-    bpf_probe_read_kernel(&data.message, sizeof(data.message), message);
-    //data.mount_inum=mnt_ns->ns.inum;
-    hey.perf_submit(ctx, &data, sizeof(data));
-
-    char first_7_chars[9];
-    bpf_probe_read(first_7_chars, 9, dev_name);
-    const char prefix[] = "/dev/sd";
-    event.pid = bpf_get_current_pid_tgid() & 0xffffffff;
-    event.tgid = bpf_get_current_pid_tgid() >> 32;
-
-    if (true) {
-        // Disallow the mount call
-        //bpf_trace_printk("first 7 %s", first_7_chars);
-        //return -EPERM;
-    }
-
-    bpf_trace_printk("Mount onto path: %s  --- %s ", path->dentry->d_iname, dev_name);
-    return -1;
+    return 0;
 }
