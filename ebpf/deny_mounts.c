@@ -179,11 +179,26 @@ static __always_inline int get_config(u32 key)
 }
 
 TRACEPOINT_PROBE(sched, sched_process_exit)
-
 {
     context_t context = {};
     init_context(&context, false);
-    // Todo implement
+    int i = 0;
+    int ii = 0;
+    u32 *val;
+    for (i=0; i<=CONTAINER_MAX_IDS;i++){
+        // Intermediate value because verifier does not know the iterator linearly increases if passed to loockup()
+        ii = i;
+        val = container_pids.lookup(&ii);
+        if (val) {
+            // check if the task originates from a container pid
+            if (*val == context.host_pid) {
+                container_pids.delete(&ii);
+                bpf_trace_printk("pid:[%d] removed from list of container pids \n",context.host_pid);
+                return  0;
+            }
+        } 
+    }
+    return 0;
 }
 // https://www.bluetoad.com/publication/?i=701493&article_id=3987581&view=articleBrowser
 /*  Deny programs with pppid == 1 to get new process executions in the containers
@@ -198,28 +213,25 @@ LSM_PROBE(bprm_check_security, struct linux_binprm *bprm)
     u32 *val;
     for (i=0; i<=CONTAINER_MAX_IDS;i++){
         // Intermediate value because verifier does not know the iterator linearly increases if passed to loockup()
-        ii=i;
+        ii = i;
         val = container_pids.lookup(&ii);
         if (val) {
             // check if the task originates from a container pid
             if (*val == context.host_ppid) {
-                // Loop
-                if (ii < CONTAINER_MAX_IDS){
-                    int index = ii+1;
-                    for (int iii = 0; iii<=CONTAINER_MAX_IDS; iii++){
-                        index=iii;
-                        val = container_pids.lookup(&index);
-                        if (val){
-                            // update the array with new pid
-                            if(*val == 0){
-                                container_pids.update(&index, &context.host_pid);
-                                bpf_trace_printk("add pid:[%d] to list of container pids \n",context.host_pid);
-                                return  0;
-                            }
+                int index = 0;
+                for (int iii = 0; iii<=CONTAINER_MAX_IDS; iii++){
+                    index = iii;
+                    val = container_pids.lookup(&index);
+                    if (val){
+                        // update the array with new pid
+                        if(*val == 0){
+                            container_pids.update(&index, &context.host_pid);
+                            bpf_trace_printk("add pid:[%d] to list of container pids \n",context.host_pid);
+                            return  0;
                         }
                     }
-                    return 0;
                 }
+                return 0;
             }
         } 
     }
@@ -229,12 +241,9 @@ LSM_PROBE(bprm_check_security, struct linux_binprm *bprm)
 LSM_PROBE(sb_mount, const char *dev_name, const struct path *path,
 	 const char *type, unsigned long flags, void *dat)
 {
-    /*if (dev_name == NULL || path == NULL || type == NULL || flags == NULL || dat == NULL) {
-        return false;
-    }*/
-
     context_t context = {};
-    init_context(&context, true);
+    init_context(&context, false);
+
     int i = 0;
     int ii = 0;
     u32 *val;
@@ -244,13 +253,11 @@ LSM_PROBE(sb_mount, const char *dev_name, const struct path *path,
         ii=i;
         val = container_pids.lookup(&ii);
         if (val) {
-            bpf_trace_printk("context: %d", context.host_pid);
-            bpf_trace_printk("context: %d", context.host_ppid);
-            bpf_trace_printk("context: %d", context.pid);
-            bpf_trace_printk("context: %d", context.ppid);
-
             //originates from a container pid
-            if (*val == context.host_ppid || *val == context.ppid) {bpf_trace_printk("Deny");return -EPERM;}
+            if (*val == context.host_ppid || *val == context.ppid) {
+                bpf_trace_printk("Denied mount path: %s  --- onto %s ",dev_name ,path->dentry->d_iname)
+                ;return -EPERM;
+            }
         } 
     }
 
