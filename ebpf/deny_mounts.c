@@ -45,27 +45,6 @@ enum event_type {
     EVENT_UMOUNT_RET,
 };
 
-struct data_t {
-    enum event_type type;
-    pid_t pid, tgid;
-    union {
-        /* EVENT_MOUNT, EVENT_UMOUNT */
-        struct {
-            /* current->nsproxy->mnt_ns->ns.inum */
-            unsigned int mnt_ns;
-            char comm[TASK_COMM_LEN];
-            unsigned long flags;
-        } enter;
-        /*
-         * EVENT_MOUNT_SOURCE, EVENT_MOUNT_TARGET, EVENT_MOUNT_TYPE,
-         * EVENT_MOUNT_DATA, EVENT_UMOUNT_TARGET
-         */
-        char str[MAX_STR_LEN];
-        /* EVENT_MOUNT_RET, EVENT_UMOUNT_RET */
-        int retval;
-    };
-};
-
 
 #define READ_KERN(ptr) ({ typeof(ptr) _val;                             \
                           __builtin_memset(&_val, 0, sizeof(_val));     \
