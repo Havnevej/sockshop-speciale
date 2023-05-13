@@ -1,6 +1,5 @@
-
 # This code is a bcc program to work alongside deny_mounts.c which denies mount syscalls originating from containers on the system
-
+# This is for the sockshop system to disallow the mount attack vector highlighted in the thesis paper
 # Import necessary libraries
 from bcc import BPF
 import os
