@@ -177,7 +177,9 @@ static __always_inline int get_config(u32 key)
 
     return *config;
 }
+
 TRACEPOINT_PROBE(sched, sched_process_exit)
+
 {
     context_t context = {};
     init_context(&context, false);
