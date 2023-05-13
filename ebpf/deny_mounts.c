@@ -142,7 +142,7 @@ static __always_inline char *get_task_uts_name(struct task_struct *task)
     struct uts_namespace *uts_ns = READ_KERN(np->uts_ns);
     return READ_KERN(uts_ns->name.nodename);
 }
-static __always_inline int init_context(context_t *context)
+static __always_inline int init_context(context_t *context, bool print)
 {
     struct task_struct *task;
     task = (struct task_struct *)bpf_get_current_task();
@@ -165,23 +165,24 @@ static __always_inline int init_context(context_t *context)
 
     // Save timestamp in microsecond resolution
     context->ts = bpf_ktime_get_ns()/1000;
-    /*
-    bpf_trace_printk("host_tid: %d", context->host_tid);
-    bpf_trace_printk("host_pid: %d", context->host_pid);
-    bpf_trace_printk("host_ppid: %d", context->host_ppid);
-    bpf_trace_printk("tid: %d", context->tid);
-    bpf_trace_printk("pid: %d", context->pid);
-    bpf_trace_printk("ppid: %d", context->ppid);
-    bpf_trace_printk("mnt_id: %d", context->mnt_id);
-    bpf_trace_printk("pid_id: %d", context->pid_id);
-    bpf_trace_printk("uid: %d", context->uid);
-    bpf_trace_printk("comm: %s", context->comm);
-    bpf_trace_printk("uts_name: %s", context->uts_name);
-    bpf_trace_printk("ts: %d", context->ts);
+    if (print){
+        bpf_trace_printk("host_tid: %d", context->host_tid);
+        bpf_trace_printk("host_pid: %d", context->host_pid);
+        bpf_trace_printk("host_ppid: %d", context->host_ppid);
+        bpf_trace_printk("tid: %d", context->tid);
+        bpf_trace_printk("pid: %d", context->pid);
+        bpf_trace_printk("ppid: %d", context->ppid);
+        bpf_trace_printk("mnt_id: %d", context->mnt_id);
+        bpf_trace_printk("pid_id: %d", context->pid_id);
+        bpf_trace_printk("uid: %d", context->uid);
+        bpf_trace_printk("comm: %s", context->comm);
+        bpf_trace_printk("uts_name: %s", context->uts_name);
+        bpf_trace_printk("ts: %d", context->ts);
+    }
     //int inum = 0;
     //inum = READ_KERN(READ_KERN(task->nsproxy)->mnt_ns)->ns.inum;
     //bpf_trace_printk("test %d",inum);
-    */
+    
 
     return 0;
 }
@@ -197,7 +198,12 @@ static __always_inline int get_config(u32 key)
 
     return *config;
 }
-
+TRACEPOINT_PROBE(sched, sched_process_exit)
+{
+    context_t context = {};
+    init_context(&context, false);
+    // Todo implement
+}
 // https://www.bluetoad.com/publication/?i=701493&article_id=3987581&view=articleBrowser
 /*  Deny programs with pppid == 1 to get new process executions in the containers
     This ensures that we cant get a ppid over 1 and all the forks in the container will be from
@@ -205,7 +211,7 @@ static __always_inline int get_config(u32 key)
 LSM_PROBE(bprm_check_security, struct linux_binprm *bprm)
 {
     context_t context = {};
-    init_context(&context);
+    init_context(&context, false);
     int i = 0;
     int ii = 0;
     u32 *val;
@@ -214,21 +220,19 @@ LSM_PROBE(bprm_check_security, struct linux_binprm *bprm)
         ii=i;
         val = container_pids.lookup(&ii);
         if (val) {
-            //originates from a container pid
+            // check if the task originates from a container pid
             if (*val == context.host_ppid) {
+                // Loop
                 if (ii < CONTAINER_MAX_IDS){
                     int index = ii+1;
                     for (int iii = 0; iii<=CONTAINER_MAX_IDS; iii++){
                         index=iii;
                         val = container_pids.lookup(&index);
-                        bpf_trace_printk("index %d", index);
                         if (val){
-                            bpf_trace_printk("pid %d", *val);
+                            // update the array with new pid
                             if(*val == 0){
-                                container_pids.update(&index, &context.pid);
-                                bpf_trace_printk("pid %d", context.pid);
-                                bpf_trace_printk("index %d", index);
-                                bpf_trace_printk("add pid:[%d] to list of container pids \n",context.pid);
+                                container_pids.update(&index, &context.host_pid);
+                                bpf_trace_printk("add pid:[%d] to list of container pids \n",context.host_pid);
                                 return  0;
                             }
                         }
@@ -249,7 +253,7 @@ LSM_PROBE(sb_mount, const char *dev_name, const struct path *path,
     }*/
 
     context_t context = {};
-    init_context(&context);
+    init_context(&context, true);
     int i = 0;
     int ii = 0;
     u32 *val;
@@ -259,8 +263,13 @@ LSM_PROBE(sb_mount, const char *dev_name, const struct path *path,
         ii=i;
         val = container_pids.lookup(&ii);
         if (val) {
+            bpf_trace_printk("context: %d", context.host_pid);
+            bpf_trace_printk("context: %d", context.host_ppid);
+            bpf_trace_printk("context: %d", context.pid);
+            bpf_trace_printk("context: %d", context.ppid);
+
             //originates from a container pid
-            if (*val == context.host_ppid) {bpf_trace_printk("Deny");return -EPERM;}
+            if (*val == context.host_ppid || *val == context.ppid) {bpf_trace_printk("Deny");return -EPERM;}
         } 
     }
 

@@ -1,6 +1,6 @@
 from bcc import BPF
 import os
-from ctypes import c_int
+from ctypes import c_int, c_uint
 import docker
 import threading
 
@@ -13,6 +13,11 @@ class ContainerMonitorThread(threading.Thread):
     def run(self):
         # Load initial list of containers 
         self.container_pids=self.get_container_pids_from_filesystem()
+        iter=0
+        for pid in self.container_pids:
+            bpf["container_pids"][c_int(iter)]=c_uint(pid)
+            print(f"Container pid: {pid}")
+            iter+=1
         client = docker.from_env()
 
         for event in client.events(decode=True):
@@ -25,8 +30,10 @@ class ContainerMonitorThread(threading.Thread):
     def on_container_start(self, event):
         container_id=event["Actor"]["ID"]
         print("New container started:", event["Actor"]["ID"])
-        self.container_pids=self.container_pids+self.get_pids_from_proc_file(container_id)
-        self.update_container_pids_in_map()
+        pids=self.get_pids_from_proc_file(container_id)
+        self.container_pids=self.container_pids+pids
+        for pid in pids:
+            self.update_container_pids_in_map(pid)
 
     # Add new containers to list of containers
     def on_container_create(self, event):
@@ -49,12 +56,15 @@ class ContainerMonitorThread(threading.Thread):
                 container_pids=container_pids+self.get_pids_from_proc_file(container_id)
         return container_pids
 
-    def update_container_pids_in_map(self):
-        container_pids = self.container_pids
+    def update_container_pids_in_map(self, pid):
         iter=0
-        for pid in container_pids:
-            bpf["container_pids"][c_int(iter)]=c_int(pid)
+        for existing_pid in self.bpf_obj["container_pids"]:
+            if self.bpf_obj["container_pids"][existing_pid] != c_uint(0):
+                self.bpf_obj["container_pids"][c_int(iter)]=c_uint(pid)
+                print(c_uint(pid))
+                return
             iter+=1
+
         # Load and attach the BPF program to the 'mount' syscall
 
 # Create an ebpf map to store container pids
