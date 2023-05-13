@@ -4,7 +4,6 @@ from ctypes import c_int, c_uint
 import docker
 import threading
 
-
 class ContainerMonitorThread(threading.Thread):
     container_pids=[]
     containers=[]
