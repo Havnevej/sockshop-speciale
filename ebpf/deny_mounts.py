@@ -49,9 +49,12 @@ class ContainerMonitor(threading.Thread):
     # Get pids from proc file
     def get_pids_from_proc_file(self, container_id):
         container_pids = []
-        with open(f'/sys/fs/cgroup/system.slice/docker-{container_id}.scope/cgroup.procs', 'r') as procs_file:
-            for pid in procs_file:
-                container_pids.append(int(pid.strip()))
+        try:
+            with open(f'/sys/fs/cgroup/system.slice/docker-{container_id}.scope/cgroup.procs', 'r') as procs_file:
+                for pid in procs_file:
+                    container_pids.append(int(pid.strip()))
+        except:
+            pass
         return container_pids
     
     # Get container pids from filesystem
