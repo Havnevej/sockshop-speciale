@@ -54,4 +54,4 @@ bpftool cgroup attach /sys/fs/cgroup/unified/ cgroup1 deny_mount
 This command will attach the deny_mount eBPF program to the cgroup's mount syscall, effectively denying mount operations.
 
 # Conclusion
-Both approaches will run the deny_mount eBPF program, which will monitor for mount system calls and deny them. The BCC Python approach is simpler and more automated, while the manual approach using the Clang compiler gives you more control over the process. Choose the one that best fits your needs.
+Both approaches will run the deny_mount eBPF program, which will monitor for mount system calls and deny them. The BCC Python approach is simpler and more automated, while the manual approach using the Clang compiler gives you more control over the process. 
