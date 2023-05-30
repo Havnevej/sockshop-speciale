@@ -11,41 +11,20 @@
 #define MAX_STR_LEN 412
 #define CONTAINER_MAX_IDS 512
 
+// the bpf array to store the container pids
 BPF_ARRAY(container_pids, u32, CONTAINER_MAX_IDS);
-
-struct mnt_namespace {
-    atomic_t count;
-    struct ns_common ns;
-};
-
-struct cgroup_namespace {
-	struct ns_common	ns;
-	struct user_namespace	*user_ns;
-	struct ucounts		*ucounts;
-	struct css_set          *root_cset;
-};
 
 struct new_utsname {
     char nodename[65];
 };
+// Not exported in kernel headers for ebpf
 struct uts_namespace {
     struct new_utsname name;
     struct ns_common ns;
 };
 
-enum event_type {
-    EVENT_MOUNT,
-    EVENT_MOUNT_SOURCE,
-    EVENT_MOUNT_TARGET,
-    EVENT_MOUNT_TYPE,
-    EVENT_MOUNT_DATA,
-    EVENT_MOUNT_RET,
-    EVENT_UMOUNT,
-    EVENT_UMOUNT_TARGET,
-    EVENT_UMOUNT_RET,
-};
 
-
+// Source for awesome BPF helper function: https://github.com/kubearmor/KubeArmor/blob/69e6f2fab246ad837af5b824a94653ee2764f948/KubeArmor/BPF/system_monitor.c#L5 
 #define READ_KERN(ptr) ({ typeof(ptr) _val;                             \
                           __builtin_memset(&_val, 0, sizeof(_val));     \
                           bpf_probe_read(&_val, sizeof(_val), &ptr);    \
@@ -74,10 +53,10 @@ struct pid_link {
     struct hlist_node node;
     struct pid *pid;
 };
-struct task_struct___older_v50 {
-    struct pid_link pids[PIDTYPE_MAX];
-};
-// Functions
+/*
+These functions are from KubeArmor and are used to get the context of a task
+*/
+// Functions https://github.com/kubearmor/KubeArmor/blob/69e6f2fab246ad837af5b824a94653ee2764f948/KubeArmor/BPF/system_monitor.c
 static __always_inline u32 get_task_ppid(struct task_struct *task)
 {
     return READ_KERN(READ_KERN(task->real_parent)->pid);
@@ -121,6 +100,9 @@ static __always_inline char *get_task_uts_name(struct task_struct *task)
     struct uts_namespace *uts_ns = READ_KERN(np->uts_ns);
     return READ_KERN(uts_ns->name.nodename);
 }
+/*
+    Function to get the context of the current task using the functions from Kubearmor
+*/
 static __always_inline int init_context(context_t *context, bool print)
 {
     struct task_struct *task;
@@ -144,6 +126,7 @@ static __always_inline int init_context(context_t *context, bool print)
 
     // Save timestamp in microsecond resolution
     context->ts = bpf_ktime_get_ns()/1000;
+    // print the values if needed
     if (print){
         bpf_trace_printk("host_tid: %d", context->host_tid);
         bpf_trace_printk("host_pid: %d", context->host_pid);
@@ -158,26 +141,14 @@ static __always_inline int init_context(context_t *context, bool print)
         bpf_trace_printk("uts_name: %s", context->uts_name);
         bpf_trace_printk("ts: %d", context->ts);
     }
-    //int inum = 0;
-    //inum = READ_KERN(READ_KERN(task->nsproxy)->mnt_ns)->ns.inum;
-    //bpf_trace_printk("test %d",inum);
-    
 
     return 0;
 }
 
-BPF_HASH(config_map, u32, u32);
-
-static __always_inline int get_config(u32 key)
-{
-    u32 *config = bpf_map_lookup_elem(&config_map, &key);
-
-    if (config == NULL)
-        return 0;
-
-    return *config;
-}
-
+/*
+    The tracepoint probe to remove a pid from the list of container pids
+    when the process exits
+*/
 TRACEPOINT_PROBE(sched, sched_process_exit)
 {
     context_t context = {};
@@ -201,8 +172,8 @@ TRACEPOINT_PROBE(sched, sched_process_exit)
     return 0;
 }
 // https://www.bluetoad.com/publication/?i=701493&article_id=3987581&view=articleBrowser
-/*  Deny programs with pppid == 1 to get new process executions in the containers
-    This ensures that we cant get a ppid over 1 and all the forks in the container will be from
+/*  
+    The function to get new processes and compare them to the list of container pids, if any new process has the parent of a known container pid, add it to the list
 */
 LSM_PROBE(bprm_check_security, struct linux_binprm *bprm)
 {
@@ -220,6 +191,7 @@ LSM_PROBE(bprm_check_security, struct linux_binprm *bprm)
             if (*val == context.host_ppid) {
                 int index = 0;
                 for (int iii = 0; iii<=CONTAINER_MAX_IDS; iii++){
+                    // We need to find an empty slot in the array
                     index = iii;
                     val = container_pids.lookup(&index);
                     if (val){
@@ -255,15 +227,10 @@ LSM_PROBE(sb_mount, const char *dev_name, const struct path *path,
         if (val) {
             //originates from a container pid
             if (*val == context.host_ppid || *val == context.ppid) {
-                bpf_trace_printk("Denied mount path: %s  --- onto %s ",dev_name ,path->dentry->d_iname)
-                ;return -EPERM;
+                bpf_trace_printk("Denied mount path: %s  --- onto %s ",dev_name ,path->dentry->d_iname);
+                return -EPERM;
             }
         } 
-    }
-
-    if (context.ppid == 1 && context.host_ppid != 1){
-        bpf_trace_printk("Deny mount path: %s  --- onto %s ",dev_name ,path->dentry->d_iname);
-        return -EPERM;
     }
     return 0;
 }
